@@ -32,7 +32,7 @@ import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
-from dataset import MedicalDataset, MedicalDataAugmentationDINO
+from dataset import GliomaDataset, DeepLesionDataset
 from model import get_model
 
 import utils
@@ -43,16 +43,16 @@ def get_args_parser():
 
     # Model parameters
     parser.add_argument('--arch', default='ResNext50', type=str,
-                        choices=['DenseNet121', 'ResNext50'], help="""Name of architecture to train. For quick 
+                        choices=['DenseNet121', 'ResNext50', 'ResNet50'], help="""Name of architecture to train. For quick 
                         experiments with ViTs, we recommend using vit_tiny or vit_small.""")
-    parser.add_argument('--patch_size', default=16, type=int, help="""Size in pixels
-                        of input square patches - default 16 (for 16x16 patches). Using smaller
-                        values leads to better performance but requires more memory. Applies only
-                        for ViTs (vit_tiny, vit_small and vit_base). If <16, we recommend disabling
-                        mixed precision training (--use_fp16 false) to avoid unstabilities.""")
-    parser.add_argument('--out_dim', default=4096, type=int, help="""Dimensionality of
+    # parser.add_argument('--patch_size', default=16, type=int, help="""Size in pixels
+    #                     of input square patches - default 16 (for 16x16 patches). Using smaller
+    #                     values leads to better performance but requires more memory. Applies only
+    #                     for ViTs (vit_tiny, vit_small and vit_base). If <16, we recommend disabling
+    #                     mixed precision training (--use_fp16 false) to avoid unstabilities.""")
+    parser.add_argument('--out_dim', default=128, type=int, help="""Dimensionality of
                         the DINO head output. For complex and large datasets large values (like 65536) work well.""")
-    parser.add_argument('--norm_last_layer', default=True, type=utils.bool_flag,
+    parser.add_argument('--norm_last_layer', default=False, type=utils.bool_flag,
                         help="""Whether or not to weight normalize the last layer of the DINO head.
                         Not normalizing leads to better performance but can make the training unstable.
                         In our experiments, we typically set this paramater to False with vit_small and True with vit_base.""")
@@ -85,9 +85,9 @@ def get_args_parser():
     parser.add_argument('--clip_grad', type=float, default=3.0, help="""Maximal parameter
                         gradient norm if using gradient clipping. Clipping with norm .3 ~ 1.0 can
                         help optimization for larger ViT architectures. 0 for disabling.""")
-    parser.add_argument('--batch_size_per_gpu', default=32, type=int,
+    parser.add_argument('--batch_size_per_gpu', default=48, type=int,
                         help='Per-GPU batch-size : number of distinct images loaded on one GPU.')
-    parser.add_argument('--epochs', default=300, type=int, help='Number of epochs of training.')
+    parser.add_argument('--epochs', default=100, type=int, help='Number of epochs of training.')
     parser.add_argument('--freeze_last_layer', default=1, type=int, help="""Number of epochs
                         during which we keep the output layer fixed. Typically doing so during
                         the first epoch helps training. Try increasing this value if the loss does not decrease.""")
@@ -115,8 +115,8 @@ def get_args_parser():
                         Used for small local view cropping of multi-crop.""")
 
     # Misc
-    parser.add_argument('--data_path', default='/media/johannes/WD Elements/DINO-Glioblastoma-SSL/dino-original-facebook/tiny-imagenet-200/train/', 
-                        type=str, help='Please specify path to the ImageNet training data.')
+    # parser.add_argument('--data_path', default='/media/johannes/WD Elements/DINO-Glioblastoma-SSL/dino-original-facebook/tiny-imagenet-200/train/', 
+    #                     type=str, help='Please specify path to the ImageNet training data.')
     parser.add_argument('--output_dir', default="./results/", type=str, help='Path to save logs and checkpoints.')
     parser.add_argument('--saveckp_freq', default=20, type=int, help='Save checkpoint every x epochs.')
     parser.add_argument('--seed', default=0, type=int, help='Random seed.')
@@ -127,13 +127,18 @@ def get_args_parser():
     return parser
 
 
-def train_dino(args, sequence):
+def train_dino(args, sequence, dataset_name):
     utils.init_distributed_mode(args)
     utils.fix_random_seeds(args.seed)
     cudnn.benchmark = True  
 
     # load dataset
-    dataset = MedicalDataset(args=args, sequence=sequence)
+
+    if dataset_name == "deeplesion":
+        dataset = DeepLesionDataset(args=args, path="/home/moonsurfer/Code/foundation-cancer-image-biomarker/data/preprocessing/deeplesion/annotations/pretrain.csv")
+    else:
+        dataset = GliomaDataset(args=args, sequence=sequence)
+    
     sampler = torch.utils.data.DistributedSampler(dataset, shuffle=True)
     data_loader = torch.utils.data.DataLoader(dataset, sampler=sampler, batch_size=args.batch_size_per_gpu, num_workers=args.num_workers, pin_memory=True, drop_last=True)
     print(f"Data loaded: there are {len(dataset)} images.")    
@@ -209,7 +214,7 @@ def train_dino(args, sequence):
     # ============ optionally resume training ... ============
     to_restore = {"epoch": 0}
     utils.restart_from_checkpoint(
-        os.path.join(args.output_dir, f"{sequence}_checkpoint.pth"),
+        os.path.join(args.output_dir, f"{args.arch}_{dataset_name}_{sequence}_checkpoint.pth"),
         run_variables=to_restore,
         student=student,
         teacher=teacher,
@@ -247,15 +252,15 @@ def train_dino(args, sequence):
         if fp16_scaler is not None:
             save_dict['fp16_scaler'] = fp16_scaler.state_dict()
         
-        utils.save_on_master(save_dict, os.path.join(args.output_dir, f'{sequence}_checkpoint.pth'))
+        utils.save_on_master(save_dict, os.path.join(args.output_dir, f'{args.arch}_{dataset_name}_{sequence}_checkpoint.pth'))
 
         if args.saveckp_freq and epoch % args.saveckp_freq == 0:
-            utils.save_on_master(save_dict, os.path.join(args.output_dir, f'{sequence}_checkpoint{epoch:04}.pth'))
+            utils.save_on_master(save_dict, os.path.join(args.output_dir, f'{args.arch}_{dataset_name}_{sequence}_checkpoint{epoch:04}.pth'))
 
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()}, 'epoch': epoch}
 
         if utils.is_main_process():
-            with (Path(args.output_dir) / f"{sequence}_train_stats.txt").open("a") as f:
+            with (Path(args.output_dir) / f"{args.arch}_{dataset_name}_{sequence}_train_stats.txt").open("a") as f:
                 f.write(json.dumps(log_stats) + "\n")
 
         loss_list.append(train_stats["loss"])
@@ -299,7 +304,7 @@ def train_dino(args, sequence):
         plt.grid()
         plt.legend()
 
-        plt.savefig(Path(args.output_dir) / f"{sequence}_train_stats.png")
+        plt.savefig(Path(args.output_dir) / f"{args.arch}_{dataset_name}_{sequence}_train_stats.png")
         plt.close()
 
     total_time = time.time() - start_time
@@ -448,10 +453,13 @@ if __name__ == '__main__':
 
     # T1, T2, T1T1, T2T2, T1T2, T1T2T1T2
 
-    for sequence in ["T1T2"]:
+    for architecture in ["ResNext50"]:
+        for dataset in ["deeplesion"]:
+            for sequence in ["T1"]:
 
-        parser = argparse.ArgumentParser('DINO', parents=[get_args_parser()])
-        # args = parser.parse_args()
-        args, unknown = parser.parse_known_args()
-        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-        train_dino(args, sequence)
+                parser = argparse.ArgumentParser('DINO', parents=[get_args_parser()])
+                # args = parser.parse_args()
+                args, unknown = parser.parse_known_args()
+                args.arch = architecture
+                Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+                train_dino(args, sequence, dataset)
