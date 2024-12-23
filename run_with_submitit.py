@@ -20,7 +20,7 @@ import os
 import uuid
 from pathlib import Path
 
-import main_dino2d
+import _delete.main_dino2d as main_dino2d
 import submitit
 
 
@@ -60,7 +60,7 @@ class Trainer(object):
         self.args = args
 
     def __call__(self):
-        import main_dino2d
+        import _delete.main_dino2d as main_dino2d
 
         self._setup_gpu_args()
         main_dino2d.train_dino(self.args)
