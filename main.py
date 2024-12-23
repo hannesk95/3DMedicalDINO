@@ -34,6 +34,7 @@ import matplotlib.pyplot as plt
 
 from dataset import GliomaDataset, DeepLesionDataset
 from model import get_model
+from loss import DINOLoss
 
 import utils
 from _delete.vision_transformer import DINOHead
