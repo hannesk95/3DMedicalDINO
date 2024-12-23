@@ -146,7 +146,7 @@ def main(args):
     results_df["target"] = test_y
 
     results_df = results_df.drop(columns=[col for col in results_df.columns if col.startswith("feature")])
-    results_df.to_csv(Path("/home/moonsurfer/Code/3DMedicalSimCLR/features") / "test_results.csv", index=False)
+    results_df.to_csv(Path("/home/moonsurfer/Code/3DMedicalDINO/features") / "test_results.csv", index=False)
 
     results_df = pd.DataFrame()
     probs = classifier.predict_proba(val_X)
@@ -159,10 +159,10 @@ def main(args):
     results_df["target"] = val_y
 
     results_df = results_df.drop(columns=[col for col in results_df.columns if col.startswith("feature")])
-    results_df.to_csv(Path("/home/moonsurfer/Code/3DMedicalSimCLR/features") / "val_results.csv", index=False)
+    results_df.to_csv(Path("/home/moonsurfer/Code/3DMedicalDINO/features") / "val_results.csv", index=False)
 
     # Save model
-    joblib.dump(classifier, Path("/home/moonsurfer/Code/3DMedicalSimCLR/features") / "model.pkl")
+    joblib.dump(classifier, Path("/home/moonsurfer/Code/3DMedicalDINO/features") / "model.pkl")
 
 
 if __name__ == "__main__":
