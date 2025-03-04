@@ -245,16 +245,21 @@ class DeepLesionDataAugmentationDINO():
         pad_local = monai.transforms.SpatialPad(spatial_size=(20,20,20))
         threshold = monai.transforms.ThresholdIntensity(threshold=-1024, cval=-1024)
         normalize = monai.transforms.NormalizeIntensity(subtrahend=-1024, divisor=3072)
+        channel_first = monai.transforms.EnsureChannelFirst(channel_dim='no_channel')
+        totensor = monai.transforms.ToTensor()
 
         # first global crop
-        self.global_transfo1 = Compose([crop_resize_global, flip, shift, smooth, pad_global, threshold, normalize])
+        self.global_transfo1 = Compose([totensor, channel_first, 
+                                        crop_resize_global, flip, shift, smooth, pad_global, threshold, normalize])
 
         # second global crop
-        self.global_transfo2 = Compose([crop_resize_global, flip, shift, smooth, pad_global, threshold, normalize])
+        self.global_transfo2 = Compose([totensor, channel_first, 
+                                        crop_resize_global, flip, shift, smooth, pad_global, threshold, normalize])
         
         # transformation for the local small crops
         self.local_crops_number = local_crops_number
-        self.local_transfo = Compose([crop_resize_local, flip, shift, smooth, pad_local, threshold, normalize])
+        self.local_transfo = Compose([totensor, channel_first, 
+                                      crop_resize_local, flip, shift, smooth, pad_local, threshold, normalize])
 
     def __call__(self, image):
         crops = []

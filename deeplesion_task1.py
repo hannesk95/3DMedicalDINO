@@ -126,6 +126,9 @@ def main(args):
 
     if args.scoring == "roc_auc":
         score = sklearn.metrics.roc_auc_score(test_y, classifier.predict_proba(test_X)[:, 1])
+    elif args.scoring == "bacc":
+        preds = classifier.predict(test_X)
+        score = sklearn.metrics.balanced_accuracy_score(test_y, preds)
     else:
         score = classifier.score(test_X, test_y)
 

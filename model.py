@@ -10,7 +10,7 @@ import monai.networks
 from monai.networks.nets import resnet
 
 
-def get_model(model_name: Literal["DenseNet121", "ResNext50", "ResNet50"], sequence: str) -> Union[Module, int]:
+def get_model(model_name: Literal["DenseNet121", "ResNeXt50", "ResNet50", "ConvNeXt"], sequence: str) -> Union[Module, int]:
 
     if sequence == "deeplesion":
         in_channels = 1
@@ -31,7 +31,7 @@ def get_model(model_name: Literal["DenseNet121", "ResNext50", "ResNet50"], seque
             teacher = torch.nn.Sequential(*list(teacher.children()), torch.nn.AdaptiveAvgPool3d(output_size=1),torch.nn.Flatten())
             embedding_dim = 1024            
         
-        case "ResNext50":
+        case "ResNeXt50":
             student = monai.networks.nets.SEResNext50(spatial_dims=3, in_channels=in_channels)
             student = torch.nn.Sequential(*list(student.children())[:-1], torch.nn.Flatten())            
             teacher = monai.networks.nets.SEResNext50(spatial_dims=3, in_channels=in_channels)
@@ -60,13 +60,15 @@ def get_model(model_name: Literal["DenseNet121", "ResNext50", "ResNet50"], seque
                 "xlarge": {"depth": [3, 3, 27, 3], "dims": [256, 512, 1024, 2048]}
                 }
 
-            model_size = "tiny"
+            model_size = "large"
             student = ConvNeXt3D(in_chans=in_channels, depths=params[model_size]["depth"], dims=params[model_size]["dims"])
             teacher = ConvNeXt3D(in_chans=in_channels, depths=params[model_size]["depth"], dims=params[model_size]["dims"])
-            embedding_dim = 768
+            embedding_dim = 1536
     
     return [student, teacher, embedding_dim]
 
+
+# https://github.com/HusnuBarisBaydargil/ConvNext-Medical-Imaging/blob/main/convnext.py
 
 class ConvNeXtBlockBase(nn.Module):
     def __init__(self, dim, conv_layer, drop_path=0., layer_scale_init_value=1e-6):

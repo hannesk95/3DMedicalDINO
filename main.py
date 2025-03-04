@@ -86,7 +86,7 @@ def get_args_parser():
     parser.add_argument('--clip_grad', type=float, default=3.0, help="""Maximal parameter
                         gradient norm if using gradient clipping. Clipping with norm .3 ~ 1.0 can
                         help optimization for larger ViT architectures. 0 for disabling.""")
-    parser.add_argument('--batch_size_per_gpu', default=48, type=int,
+    parser.add_argument('--batch_size_per_gpu', default=64, type=int,
                         help='Per-GPU batch-size : number of distinct images loaded on one GPU.')
     parser.add_argument('--epochs', default=100, type=int, help='Number of epochs of training.')
     parser.add_argument('--freeze_last_layer', default=1, type=int, help="""Number of epochs
@@ -136,9 +136,13 @@ def train_dino(args, sequence, dataset_name):
     # load dataset
 
     if dataset_name == "deeplesion":
-        dataset = DeepLesionDataset(args=args, path="/home/moonsurfer/Code/foundation-cancer-image-biomarker/data/preprocessing/deeplesion/annotations/pretrain.csv")
+        dataset = DeepLesionDataset(args=args, 
+                                    path="/home/moonsurfer/Code/foundation-cancer-image-biomarker/data/preprocessing/deeplesion/annotations/pretrain.csv",
+                                    transform="train")
     else:
-        dataset = GliomaDataset(args=args, sequence=sequence)
+        dataset = GliomaDataset(args=args, 
+                                sequence=sequence,
+                                transform="train")
     
     sampler = torch.utils.data.DistributedSampler(dataset, shuffle=True)
     data_loader = torch.utils.data.DataLoader(dataset, sampler=sampler, batch_size=args.batch_size_per_gpu, num_workers=args.num_workers, pin_memory=True, drop_last=True)
@@ -392,16 +396,9 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, [student_outputs, teacher_outputs]
 
 
-
-
-
 if __name__ == '__main__':
 
-    # time.sleep(21600)
-
-    # T1, T2, T1T1, T2T2, T1T2, T1T2T1T2
-
-    for architecture in ["ResNext50"]:
+    for architecture in ["ConvNeXt"]:
         for dataset in ["deeplesion"]:
             for sequence in ["T1"]:
 
